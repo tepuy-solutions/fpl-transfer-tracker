@@ -2,7 +2,7 @@ name: FPL Transfer Logger
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    - cron: '*/30 * * * *'  # every 30 mins
   workflow_dispatch:
 
 jobs:
@@ -14,7 +14,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.10  # ✅ ← CORRECT VERSION
+          python-version: '3.10'  # ✅ THIS MUST BE IN QUOTES
 
       - name: Install dependencies
         run: |

@@ -29,5 +29,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add data/fpl_transfer_log.json
-          git diff --cached --quiet || git commit -m "Update transfer log"
+          git commit -m "Force update transfer log" || echo "No changes to commit"
           git push

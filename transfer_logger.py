@@ -17,6 +17,7 @@ def fetch_fpl_data():
     snapshot = {}
     for p in players:
         player_id = f"id_{p['id']}"
+        print(f"{p['web_name']} sel%: {p.get('selected_by_percent')}")
         snapshot[player_id] = {
             "timestamp": timestamp,
             "transfers_in": p["transfers_in"],

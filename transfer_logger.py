@@ -20,10 +20,12 @@ def fetch_fpl_data():
         snapshot[player_id] = {
             "timestamp": timestamp,
             "transfers_in": p["transfers_in"],
-            "transfers_out": p["transfers_out"]
+            "transfers_out": p["transfers_out"],
+            "selected_by_percent": float(p.get("selected_by_percent", 0.0))  # ✅ ADD THIS
         }
 
     return snapshot
+
 
 def load_existing_log():
     if not os.path.exists(LOG_FILE):

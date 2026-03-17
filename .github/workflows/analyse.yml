@@ -1,0 +1,78 @@
+name: Analyse price changes
+on: workflow_dispatch
+
+jobs:
+  analyse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Extract price changes
+        run: |
+          python3 << 'PYEOF'
+          import json, re
+          from collections import defaultdict
+
+          with open('data/fpl_price_log.json') as f:
+              content = f.read()
+
+          positions = [m.start() for m in re.finditer(r'\{\s*\n\s*"timestamp_utc"', content)]
+          snapshots = []
+          for i, pos in enumerate(positions):
+              end = positions[i+1] if i+1 < len(positions) else len(content)
+              chunk = content[pos:end].rstrip(',\n ')
+              if not chunk.endswith('}'):
+                  lb = chunk.rfind('\n    }')
+                  if lb > 0:
+                      chunk = chunk[:lb+6] + '\n  ]\n}'
+              try:
+                  snapshots.append(json.loads(chunk))
+              except:
+                  pass
+
+          player_days = defaultdict(list)
+          for snap in snapshots:
+              date = snap['timestamp_utc'][:10]
+              for p in snap['players']:
+                  player_days[p['id']].append({
+                      'date': date, 'name': p['name'], 'cost': p['cost'],
+                      'own': float(p.get('ownership_percent', 0) or 0),
+                      'delta_nti': p.get('delta_nti'),
+                      'total_mgrs': snap.get('total_players', 11280230)
+                  })
+
+          changes = []
+          for pid, days in player_days.items():
+              days = sorted(days, key=lambda x: x['date'])
+              cumul = 0.0
+              for i, day in enumerate(days):
+                  d = day.get('delta_nti', 0) or 0
+                  if i > 0 and days[i]['cost'] != days[i-1]['cost']:
+                      changes.append({
+                          'pid': pid, 'name': day['name'], 'date': day['date'],
+                          'prev': days[i-1]['cost'], 'new': day['cost'],
+                          'own': days[i-1]['own'], 'cumul': round(cumul),
+                          'daily': days[i-1].get('delta_nti'),
+                          'mgrs': day['total_mgrs']
+                      })
+                      cumul = d
+                  else:
+                      cumul += d
+
+          result = {
+              'snapshots': len(snapshots),
+              'first': snapshots[0]['timestamp_utc'] if snapshots else None,
+              'last': snapshots[-1]['timestamp_utc'] if snapshots else None,
+              'total_changes': len(changes),
+              'changes': changes
+          }
+          with open('price_changes_summary.json', 'w') as f:
+              json.dump(result, f, indent=2)
+          print(f"Done: {len(snapshots)} snapshots, {len(changes)} price changes")
+          PYEOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: price-changes-summary
+          path: price_changes_summary.json

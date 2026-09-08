@@ -35,6 +35,9 @@ def load_existing_log():
         return json.load(f)
 
 def save_log(log):
+    # Defensive: the data/ dir has no other tracked files, so git drops it
+    # entirely if this JSON is ever deleted -- recreate it rather than crash.
+    os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
     with open(LOG_FILE, "w") as f:
         json.dump(log, f, indent=2)
 
@@ -53,4 +56,3 @@ if __name__ == "__main__":
     updated_log = update_log(new_data, existing_log)
     save_log(updated_log)
     print("Transfer log updated.")
- 

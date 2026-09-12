@@ -2,7 +2,7 @@ name: FPL Transfer Logger
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  # every 30 mins
+    - cron: '7/30 * * * *'  # every 30 mins
   workflow_dispatch:
 
 jobs:

@@ -1,33 +1,61 @@
 name: FPL Transfer Logger
 
+# Oct 2026: GitHub throttles scheduled crons to a few runs a day, so the "every 30
+# min" schedule left the site's transfer data hours stale. This job is now a
+# self-chaining collector: one run loops for ~5h40m, logging a snapshot every 30
+# minutes (transfer_logger.py keeps the last 10 per player = 5h) and committing
+# data/fpl_transfer_log.json, then dispatches itself again. The cron is only a
+# safety net to restart the chain if it ever breaks; the concurrency group keeps
+# a single loop running at a time.
 on:
   schedule:
-    - cron: '7/30 * * * *'  # every 30 mins
+    - cron: '17 */3 * * *'
   workflow_dispatch:
 
+concurrency:
+  group: fpl-transfer-collector
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: write
+
 jobs:
-  build:
+  collect:
     runs-on: ubuntu-latest
+    timeout-minutes: 355
     steps:
       - uses: actions/checkout@v3
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'  # ✅ THIS MUST BE IN QUOTES
+          python-version: '3.10' # THIS MUST BE IN QUOTES
 
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
 
-      - name: Run script
-        run: |
-          python transfer_logger.py
-
-      - name: Commit changes
+      - name: Log every 30 minutes for ~5h40m
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/fpl_transfer_log.json
-          git commit -m "Force update transfer log" || echo "No changes to commit"
-          git push
+          end=$((SECONDS + 5*3600 + 40*60))
+          next=$SECONDS
+          while true; do
+            python transfer_logger.py || echo "logger failed"
+            git add data/fpl_transfer_log.json
+            git commit -m "Update transfer log" || echo "No changes to commit"
+            git pull --rebase -q || true
+            git push || echo "push failed"
+            next=$((next + 1800))
+            if [ $next -ge $end ]; then break; fi
+            now=$SECONDS
+            if [ $next -gt $now ]; then sleep $((next - now)); fi
+          done
+
+      - name: Hand over to the next run
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run fpl_logger.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
